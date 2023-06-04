@@ -102,8 +102,11 @@ jobs:
       # Docker image here that supports AWS CLI
    steps:
      - checkout
+     - aws-cli/setup:
+         aws-access-key-id: AWS_ACCESS_KEY
+         aws-secret-access-key: AWS_ACCESS_SECRET
+         aws-region: AWS_REGION_NAME
      - run:
-
         name: Ensure back-end infrastructure exists
         command: |
             aws cloudformation deploy \
