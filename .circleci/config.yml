@@ -160,7 +160,7 @@ jobs:
           name: Configure server
           command: |
             cd .circleci/ansible
-            ansible all -i inventory.txt -m ping            
+            wait 120            
             ansible-playbook -i inventory.txt configure-server.yml        
   deploy-frontend:
     docker:
