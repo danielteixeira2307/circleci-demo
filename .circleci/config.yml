@@ -1,40 +1,4 @@
 version: 2.1
-commands:
-  destroy_environment:
-    description: Destroy back-end and front-end cloudformation stacks given a workflow ID.
-    parameters:
-       workflow_id:
-          type: string
-      # Add parameter here   
-    steps:
-      - run:
-          name: Destroy environments
-          when: on_fail
-          command: |
-            echo "Destroying environment: <<parameters.workflow_id>> "
-            aws cloudformation delete-stack --stack-name udapeople-backend-<<parameters.workflow_id>>
-            aws s3 rm s3://udapeople-<<parameters.workflow_id>> --recursive
-            aws cloudformation delete-stack --stack-name udapeople-frontend-<<parameters.workflow_id>>
-  revert-migrations:
-    description: Revert the last migration if successfully run in the current workflow.
-    parameters:
-      when:
-        type: string
-      id:
-        type: string
-    steps:
-      - run:
-          name: Revert migrations
-          when: << parameters.when >>
-          command: |
-            SUCCESS=$(curl https://kvdb.io/G559d3BXysd3G12DDFtFd8/migration_${CIRCLE_WORKFLOW_ID:0:7} -d '1')
-            if (( $SUCCESS==1 )); 
-            then
-              cd ~/project/backend
-              npm install
-              npm run migrations:revert
-              
-            fi
 jobs:
   build-frontend:
     docker:
@@ -146,8 +110,7 @@ jobs:
               --template-file .circleci/files/backend.yml \
               --tags project=udapeople \
               --stack-name "udapeople-backend-${CIRCLE_WORKFLOW_ID:0:7}" \
-              --parameter-overrides ID="${CIRCLE_WORKFLOW_ID:0:7}"  
-            
+              --parameter-overrides ID="${CIRCLE_WORKFLOW_ID:0:7}"             
      - run:
         name: Ensure front-end infrastructure exist
         command: |
@@ -173,9 +136,7 @@ jobs:
         paths:
           - project/.circleci/ansible/inventory.txt
           - project/.circleci/outputs/backend_url.txt
-      # Here's where you will add some code to rollback on failure  
-     - destroy_environment:
-        workflow_id: "${CIRCLE_WORKFLOW_ID:0:7}"
+      # Here's where you will add some code to rollback on failure      
   configure_infrastructure:
     docker:
       # Docker image here that supports Ansible
@@ -183,7 +144,7 @@ jobs:
     steps:
       - checkout
       - add_ssh_keys:
-          fingerprints: ["27:a9:6d:58:e8:f2:78:ba:b3:9d:9d:dd:97:74:fe:49"]
+          fingerprints: ["ef:0d:f2:58:22:aa:f9:2c:57:57:08:32:4d:0f:aa:e1"]
       # attach workspace
       - attach_workspace:
           at: ~/
@@ -198,29 +159,7 @@ jobs:
           name: Configure server
           command: |
             cd .circleci/ansible             
-            ansible-playbook -i inventory.txt configure-server.yml
-      - destroy_environment:
-         workflow_id: "${CIRCLE_WORKFLOW_ID:0:7}"
-  run-migrations:
-    docker:
-      # Docker image here that supports NodeJS
-      - image: circleci/node:13.8.0
-    steps:
-      # Checkout code from git
-      - checkout
-      - run:
-          name: Run migrations
-          command: |
-            cd backend
-            npm install
-            npm run migrations > migrations_dump.txt            
-      - run:
-          name: Send migration results to kvdb.io
-          command: |
-             if grep -q "has been executed successfully." ~/project/backend/migrations_dump.txt
-             then
-                curl --insecure https://kvdb.io/G559d3BXysd3G12DDFtFd8/migration_${CIRCLE_WORKFLOW_ID:0:7} -d '1'
-             fi
+            ansible-playbook -i inventory.txt configure-server.yml        
   deploy-frontend:
     docker:
       - image: python:3.7-alpine3.11
@@ -251,28 +190,23 @@ jobs:
             #npm run build
             tar -czvf artifact-"${CIRCLE_WORKFLOW_ID:0:7}".tar.gz dist
             echo ${CIRCLE_WORKFLOW_ID:0:7}
-            aws s3 cp dist s3://udapeople-${CIRCLE_WORKFLOW_ID:0:7} --recursive
-      - destroy_environment:
-          workflow_id: "${CIRCLE_WORKFLOW_ID:0:7}"
-      - revert-migrations:
-          id: ${CIRCLE_WORKFLOW_ID:0:7}
-          when: on_fail
+            aws s3 cp dist s3://udapeople-${CIRCLE_WORKFLOW_ID:0:7} --recursive      
   deploy-backend:
     docker:
       - image: python:3.7-alpine3.11
         environment:
           ENVIRONMENT: "production"
           TYPEORM_CONNECTION: postgres
-          TYPEORM_HOST: database-1.chngvdiars6k.us-east-1.rds.amazonaws.com
+          TYPEORM_HOST: database-1.crxy0cbhkjib.us-east-1.rds.amazonaws.com
           TYPEORM_USERNAME: postgres
-          TYPEORM_PASSWORD: mypassword!!
+          TYPEORM_PASSWORD: mypassword
           TYPEORM_DATABASE: udapeople
           TYPEORM_PORT: 5432
           TYPEORM_ENTITIES: ./modules/domain/**/*.entity{.ts,.js}       
     steps:
       - checkout
       - add_ssh_keys:
-          fingerprints: ["27:a9:6d:58:e8:f2:78:ba:b3:9d:9d:dd:97:74:fe:49"]
+          fingerprints: ["ef:0d:f2:58:22:aa:f9:2c:57:57:08:32:4d:0f:aa:e1"]
       # attach workspace
       - attach_workspace:
           at: ~/      
@@ -297,12 +231,7 @@ jobs:
            cd .circleci/ansible
            echo "Contents of the inventory.txt file is -----"
            cat inventory.txt
-           ansible-playbook -i inventory.txt deploy-backend.yml
-      - destroy_environment:
-         workflow_id: "${CIRCLE_WORKFLOW_ID:0:7}"
-      - revert-migrations:
-          id: ${CIRCLE_WORKFLOW_ID:0:7}
-          when: on_fail
+           ansible-playbook -i inventory.txt deploy-backend.yml      
   smoke-test:
     docker:
       - image: python:3.7-alpine3.11
@@ -336,77 +265,7 @@ jobs:
                return 0
            else
                return 1
-           fi
-      # Here's where you will add some code to rollback on failure
-      - destroy_environment:
-          workflow_id: "${CIRCLE_WORKFLOW_ID:0:7}"
-      - revert-migrations:
-          id: ${CIRCLE_WORKFLOW_ID:0:7}
-          when: on_fail
-  cloudfront-update:
-    docker:
-      # Docker image here that supports AWS CLI
-      - image: amazon/aws-cli
-    steps:
-      # Checkout code from git
-      - checkout         
-      - run:
-         name: Install dependencies
-         command: |
-          yum install -y tar gzip 
-      - attach_workspace:
-          at: ~/        
-      - run:
-          name: Update cloudfront distribution
-          working_directory: ./.circleci/files
-          command: |
-            # your code here
-            aws cloudformation deploy \
-              --template-file cloudfront.yml \
-              --tags project=udapeople \
-              --stack-name udpeople-cloudfront-production \
-              --parameter-overrides WorkflowID="${CIRCLE_WORKFLOW_ID:0:7}" 
-      - persist_to_workspace:
-         root: ~/
-         paths:
-           - project/.circleci/files/oldworkflow.txt                    
-      # Here's where you will add some code to rollback on failure
-      - destroy_environment:
-          workflow_id: "${CIRCLE_WORKFLOW_ID:0:7}"
-      - revert-migrations:
-          id: ${CIRCLE_WORKFLOW_ID:0:7}
-          when: on_fail
-  cleanup:
-    docker:
-      # Docker image here
-      - image: amazon/aws-cli
-    steps:
-      # Checkout code from git
-      - checkout      
-      - run:
-         name: Install dependencies
-         command: |
-          yum install -y tar gzip
-      - attach_workspace:
-          at: ~/            
-      - run:
-          name: Clean up old stacks
-          command: |
-            # your code here
-            cd .circleci/files
-            oldstackid=$(aws cloudformation list-stacks --query "StackSummaries[*].StackName" --stack-status-filter CREATE_COMPLETE --no-paginate | grep udapeople | cut -d "-" -f 3 | cut -d '"' -f 1 | tail -n 1)
-            echo Old Workflow Id: "${oldstackid}" 
-            CurrentWorkflowID=${CIRCLE_WORKFLOW_ID:0:7}
-            echo $CurrentWorkflowID
-            if [[ "$CurrentWorkflowID" != "$oldstackid" ]]
-            then
-              echo "$oldstackid!=$CurrentWorkflowID => will delete old version"
-              aws s3 rm "s3://udapeople-${oldstackid}" --recursive
-              aws cloudformation delete-stack --stack-name "udapeople-frontend-${oldstackid}"
-              aws cloudformation delete-stack --stack-name "udapeople-backend-${oldstackid}"
-            else
-              echo "$oldstackid==$CurrentWorkflowID => nothing needs to be done..."              
-            fi
+           fi      
 workflows:
  default:
   jobs:
@@ -424,23 +283,8 @@ workflows:
         requires: [test-frontend, test-backend, scan-frontend, scan-backend]             
     - configure_infrastructure:
         requires:
-          - deploy_infrastructure                   
-    - run-migrations:
-        requires:
-          - configure_infrastructure        
-    - deploy-frontend:
-        requires: 
-          - run-migrations        
-    - deploy-backend:
-        requires: 
-          - run-migrations        
+          - deploy_infrastructure        
     - smoke-test:
         requires:
-          - deploy-backend
-          - deploy-frontend        
-    - cloudfront-update:
-        requires:
-          - smoke-test        
-    - cleanup:
-        requires:
-          - cloudfront-update                                                                                                                                                                                                                                                               
+          - configure_infrastructure        
+                                                                                                                                                                                                                                                               
